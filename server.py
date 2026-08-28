@@ -175,7 +175,6 @@ if __name__ == "__main__":
         print(f"[kiosque] veja quem esta usando:  ss -ltnp | grep :{PORTA}")
         print(f"[kiosque] ou rode em outra porta: python3 server.py 8001")
         sys.exit(1)
-    camera.iniciar()
     print(f"[kiosque] servindo {PASTA}")
     print(f"[kiosque] http://localhost:{PORTA}")
     print("[kiosque] Ctrl+C para parar")

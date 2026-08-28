@@ -179,11 +179,15 @@ class Camera:
                     # Tenta de novo: a camera pode aparecer depois do boot.
                     time.sleep(2)
                     continue
-                self._erro = None
 
             ok, quadro = cap.read()
             if not ok or quadro is None:
-                self._erro = "camera parou de entregar quadros"
+                self._erro = (
+                    f"a câmera {self.indice} abre mas não entrega imagem "
+                    f"(select() timeout). Teste fora do kiosque: "
+                    f"v4l2-ctl -d /dev/video{self.indice} --stream-mmap "
+                    f"--stream-count=3"
+                )
                 cap.release()
                 cap = None
                 time.sleep(1)
@@ -208,7 +212,7 @@ class Camera:
             with self._novo:
                 self._jpeg = jpeg
                 self._contador += 1
-                self._erro = None
+                self._erro = None      # so aqui: chegou imagem de verdade
                 self._novo.notify_all()
 
         if cap is not None:
