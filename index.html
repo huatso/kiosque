@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kiosque — Ajuste da barra preta</title>
+<title>Kiosque</title>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; }
@@ -19,12 +19,36 @@
     top: 0;
     left: 0;
     width: 100%;
-    height: 20vh;          /* valor inicial, alterado via JS */
+    height: 6.5vh;         /* valor inicial, alterado via JS */
     background: #000;
     z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 0 12px;
+    overflow: hidden;
   }
 
-  /* Painel de controle */
+  /* Botoes de energia dentro da barra preta */
+  .btn-energia {
+    background: #27272a;
+    color: #fafafa;
+    border: 1px solid #3f3f46;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-energia:hover { background: #3f3f46; }
+  .btn-energia.perigo { background: #b91c1c; border-color: #dc2626; }
+  .btn-energia.perigo:hover { background: #dc2626; }
+  .btn-energia.cancelar { background: transparent; }
+  #aviso { color: #fca5a5; font-size: 13px; margin-right: 4px; }
+
+  /* Painel de controle do vh */
   #painel {
     position: fixed;
     right: 16px;
@@ -44,12 +68,7 @@
     margin-bottom: 8px;
   }
   #slider { width: 100%; }
-  .linha {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 10px;
-  }
+  .linha { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
   #campo {
     width: 80px;
     padding: 6px 8px;
@@ -60,33 +79,40 @@
   .unidade { font-size: 13px; color: #52525b; }
   #pixels { font-size: 12px; color: #71717a; margin-top: 8px; }
 
-  /* Conteúdo da página empurrado para baixo da barra */
-  #conteudo {
-    padding: 24px;
-    margin-top: 20vh;      /* acompanha a altura da barra */
-  }
+  /* Conteudo empurrado para baixo da barra */
+  #conteudo { padding: 24px; margin-top: 6.5vh; }
+  #status { font-size: 13px; color: #71717a; min-height: 1.2em; }
 </style>
 </head>
 <body>
 
-<div id="barra"></div>
+<div id="barra">
+  <span id="aviso" hidden></span>
+  <button class="btn-energia" id="btn-desligar">Desligar</button>
+  <button class="btn-energia" id="btn-reiniciar">Reiniciar</button>
+  <button class="btn-energia perigo" id="btn-confirmar" hidden>Confirmar</button>
+  <button class="btn-energia cancelar" id="btn-cancelar" hidden>Cancelar</button>
+</div>
 
 <div id="conteudo">
   <h1>Conteúdo da página</h1>
-  <p>Use o painel no canto inferior direito para ajustar a altura da div preta em <code>vh</code>.</p>
+  <p>Tecla <kbd>c</kbd> mostra/esconde o painel de ajuste da altura da div preta (<code>vh</code>).</p>
+  <p id="status"></p>
 </div>
 
 <div id="painel">
   <label for="slider">Altura da div preta (vh)</label>
-  <input type="range" id="slider" min="0" max="100" step="0.5" value="20">
+  <input type="range" id="slider" min="0" max="100" step="0.5" value="6.5">
   <div class="linha">
-    <input type="number" id="campo" min="0" max="100" step="0.5" value="20">
+    <input type="number" id="campo" min="0" max="100" step="0.5" value="6.5">
     <span class="unidade">vh</span>
   </div>
   <div id="pixels"></div>
 </div>
 
 <script>
+  /* ---------- altura da barra preta ---------- */
+  const PADRAO   = 6.5;
   const barra    = document.getElementById('barra');
   const conteudo = document.getElementById('conteudo');
   const slider   = document.getElementById('slider');
@@ -94,7 +120,6 @@
   const pixels   = document.getElementById('pixels');
 
   function aplicar(valor) {
-    // limita entre 0 e 100
     let v = parseFloat(valor);
     if (isNaN(v)) return;
     v = Math.min(100, Math.max(0, v));
@@ -104,10 +129,8 @@
 
     slider.value = v;
     campo.value  = v;
-
     pixels.textContent = `${v}vh = ${(window.innerHeight * v / 100).toFixed(0)}px`;
 
-    // guarda o último valor usado
     try { localStorage.setItem('kiosque-vh', v); } catch (e) {}
   }
 
@@ -115,13 +138,79 @@
   campo.addEventListener('input',  e => aplicar(e.target.value));
   window.addEventListener('resize', () => aplicar(slider.value));
 
-  // valor inicial (recupera o último, se houver)
-  let inicial = 20;
+  let inicial = PADRAO;
   try {
     const salvo = localStorage.getItem('kiosque-vh');
     if (salvo !== null) inicial = parseFloat(salvo);
   } catch (e) {}
   aplicar(inicial);
+
+  /* ---------- desligar / reiniciar ---------- */
+  const btnDesligar  = document.getElementById('btn-desligar');
+  const btnReiniciar = document.getElementById('btn-reiniciar');
+  const btnConfirmar = document.getElementById('btn-confirmar');
+  const btnCancelar  = document.getElementById('btn-cancelar');
+  const aviso        = document.getElementById('aviso');
+  const status       = document.getElementById('status');
+
+  let acao = null;          // 'poweroff' | 'reboot'
+  let timerCancelar = null;
+
+  function pedirConfirmacao(qual, texto) {
+    acao = qual;
+    aviso.textContent = texto;
+    aviso.hidden = false;
+    btnDesligar.hidden = btnReiniciar.hidden = true;
+    btnConfirmar.hidden = btnCancelar.hidden = false;
+    clearTimeout(timerCancelar);
+    timerCancelar = setTimeout(resetar, 8000);   // cancela sozinho em 8s
+  }
+
+  function resetar() {
+    acao = null;
+    clearTimeout(timerCancelar);
+    aviso.hidden = true;
+    btnConfirmar.hidden = btnCancelar.hidden = true;
+    btnDesligar.hidden = btnReiniciar.hidden = false;
+  }
+
+  async function executar() {
+    const endpoint = acao === 'poweroff' ? '/api/poweroff' : '/api/reboot';
+    const rotulo   = acao === 'poweroff' ? 'Desligando' : 'Reiniciando';
+    resetar();
+    status.textContent = rotulo + '...';
+    try {
+      const r = await fetch(endpoint, { method: 'POST' });
+      const dados = await r.json();
+      if (!r.ok || !dados.ok) {
+        status.textContent = 'Falhou: ' + (dados.erro || r.status);
+      }
+    } catch (e) {
+      status.textContent = 'Sem resposta do servidor — o server.py está rodando?';
+    }
+  }
+
+  btnDesligar.addEventListener('click',  () => pedirConfirmacao('poweroff', 'Desligar o computador?'));
+  btnReiniciar.addEventListener('click', () => pedirConfirmacao('reboot',   'Reiniciar o computador?'));
+  btnConfirmar.addEventListener('click', executar);
+  btnCancelar.addEventListener('click',  resetar);
+
+  /* ---------- modo kiosque: tecla "c" mostra/esconde o painel ---------- */
+  const painel = document.getElementById('painel');
+  function mostrarPainel(mostrar) {
+    painel.hidden = !mostrar;
+    try { localStorage.setItem('kiosque-painel', mostrar ? '1' : '0'); } catch (e) {}
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'c' || e.key === 'C') mostrarPainel(painel.hidden);
+    if (e.key === 'Escape') resetar();
+  });
+  let painelVisivel = true;
+  try {
+    const salvo = localStorage.getItem('kiosque-painel');
+    if (salvo !== null) painelVisivel = salvo === '1';
+  } catch (e) {}
+  mostrarPainel(painelVisivel);
 </script>
 
 </body>
