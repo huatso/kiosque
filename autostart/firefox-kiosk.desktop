@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Firefox Kiosk
+Exec=__PASTA__/abrir-navegador.sh
+X-GNOME-Autostart-enabled=true
+NoDisplay=false

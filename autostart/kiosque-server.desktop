@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Kiosque Server
+Comment=Servidor local do kiosque (paginas + desligar/reiniciar)
+Exec=__PASTA__/server.py
+X-GNOME-Autostart-enabled=true
+NoDisplay=true

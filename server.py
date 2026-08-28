@@ -7,6 +7,7 @@ executar sozinho (uma pagina HTML nao tem acesso ao sistema operacional):
 
     POST /api/poweroff  -> systemctl poweroff
     POST /api/reboot    -> systemctl reboot
+    GET  /api/erro      -> erro do ultimo comando de energia, se houve
 
 Uso:  python3 server.py            (abre em http://localhost:8000)
       python3 server.py 8080       (outra porta)
@@ -27,6 +28,33 @@ COMANDOS = {
     "/api/reboot":   ["systemctl", "reboot"],
 }
 
+# Guarda o erro do ultimo comando de energia. Em modo kiosque nao da para
+# abrir o console do navegador, entao a pagina consulta GET /api/erro para
+# descobrir por que nada aconteceu.
+ultimo_erro = None
+
+
+def executar_energia(comando):
+    """Roda o comando; se o polkit recusar, tenta de novo via sudo -n."""
+    global ultimo_erro
+    try:
+        r = subprocess.run(comando, capture_output=True, text=True)
+        if r.returncode == 0:
+            ultimo_erro = None
+            return
+        erro = (r.stderr or r.stdout).strip()
+
+        r2 = subprocess.run(["sudo", "-n"] + comando, capture_output=True, text=True)
+        if r2.returncode == 0:
+            ultimo_erro = None
+            return
+        erro2 = (r2.stderr or r2.stdout).strip()
+
+        ultimo_erro = f"{' '.join(comando)}: {erro} | sudo: {erro2}"
+    except Exception as e:
+        ultimo_erro = f"{' '.join(comando)}: {e}"
+    print(f"[kiosque] FALHOU -> {ultimo_erro}")
+
 
 class Handler(http.server.SimpleHTTPRequestHandler):
 
@@ -38,8 +66,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(corpo)))
+        # Permite que a pagina aberta como file:// (origem "null") chame a API.
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(corpo)
+
+    def do_GET(self):
+        if self.path == "/api/erro":
+            self._json(200, {"ok": ultimo_erro is None, "erro": ultimo_erro})
+            return
+        super().do_GET()
 
     def do_POST(self):
         comando = COMANDOS.get(self.path)
@@ -54,6 +90,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         print(f"[kiosque] executando: {' '.join(comando)}")
 
+        global ultimo_erro
+        ultimo_erro = None
+
         # Responde antes de executar, senao o navegador perde a conexao
         # no meio do desligamento e mostra erro.
         self._json(200, {"ok": True, "comando": " ".join(comando)})
@@ -62,7 +101,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             pass
 
-        threading.Timer(0.5, lambda: subprocess.run(comando)).start()
+        threading.Timer(0.5, lambda: executar_energia(comando)).start()
 
     def log_message(self, formato, *args):
         # Silencia o log de cada arquivo estatico servido.

@@ -156,6 +156,10 @@
   let acao = null;          // 'poweroff' | 'reboot'
   let timerCancelar = null;
 
+  // Se a pagina foi aberta como file://, uma URL relativa viraria
+  // file:///api/poweroff. Nesse caso fala com o servidor local direto.
+  const API = location.protocol === 'file:' ? 'http://localhost:8000' : '';
+
   function pedirConfirmacao(qual, texto) {
     acao = qual;
     aviso.textContent = texto;
@@ -180,14 +184,25 @@
     resetar();
     status.textContent = rotulo + '...';
     try {
-      const r = await fetch(endpoint, { method: 'POST' });
+      const r = await fetch(API + endpoint, { method: 'POST' });
       const dados = await r.json();
       if (!r.ok || !dados.ok) {
         status.textContent = 'Falhou: ' + (dados.erro || r.status);
+        return;
       }
     } catch (e) {
       status.textContent = 'Sem resposta do servidor — o server.py está rodando?';
+      return;
     }
+    // Se em ~3s a maquina ainda estiver de pe, o comando falhou: mostra o
+    // motivo na tela (em modo kiosque nao da para abrir o console).
+    setTimeout(async () => {
+      try {
+        const r = await fetch(API + '/api/erro');
+        const dados = await r.json();
+        if (dados.erro) status.textContent = 'Falhou: ' + dados.erro;
+      } catch (e) {}
+    }, 3000);
   }
 
   btnDesligar.addEventListener('click',  () => pedirConfirmacao('poweroff', 'Desligar o computador?'));
