@@ -22,31 +22,43 @@
     height: 6.5vh;         /* valor inicial, alterado via JS */
     background: #000;
     z-index: 10;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    padding: 0 12px;
-    overflow: hidden;
+    /* Mascara da area que nao aparece na tela: nada aqui dentro. */
   }
 
-  /* Botoes de energia dentro da barra preta */
+  /* Botoes de energia — na area visivel, canto inferior esquerdo */
+  #energia {
+    position: fixed;
+    left: 16px;
+    bottom: 16px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #fff;
+    border: 1px solid #d4d4d8;
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.15);
+  }
   .btn-energia {
-    background: #27272a;
-    color: #fafafa;
-    border: 1px solid #3f3f46;
+    background: #f4f4f5;
+    color: #18181b;
+    border: 1px solid #d4d4d8;
     border-radius: 6px;
-    padding: 6px 12px;
-    font-size: 13px;
+    padding: 8px 14px;
+    font-size: 14px;
     font-family: inherit;
     cursor: pointer;
     white-space: nowrap;
   }
-  .btn-energia:hover { background: #3f3f46; }
-  .btn-energia.perigo { background: #b91c1c; border-color: #dc2626; }
-  .btn-energia.perigo:hover { background: #dc2626; }
-  .btn-energia.cancelar { background: transparent; }
-  #aviso { color: #fca5a5; font-size: 13px; margin-right: 4px; }
+  .btn-energia:hover { background: #e4e4e7; }
+  .btn-energia.perigo {
+    background: #dc2626;
+    border-color: #b91c1c;
+    color: #fff;
+  }
+  .btn-energia.perigo:hover { background: #b91c1c; }
+  #aviso { color: #b91c1c; font-size: 14px; font-weight: 600; }
 
   /* Painel de controle do vh */
   #painel {
@@ -86,12 +98,14 @@
 </head>
 <body>
 
-<div id="barra">
+<div id="barra"></div>
+
+<div id="energia">
   <span id="aviso" hidden></span>
   <button class="btn-energia" id="btn-desligar">Desligar</button>
   <button class="btn-energia" id="btn-reiniciar">Reiniciar</button>
   <button class="btn-energia perigo" id="btn-confirmar" hidden>Confirmar</button>
-  <button class="btn-energia cancelar" id="btn-cancelar" hidden>Cancelar</button>
+  <button class="btn-energia" id="btn-cancelar" hidden>Cancelar</button>
 </div>
 
 <div id="conteudo">
