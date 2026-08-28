@@ -76,6 +76,25 @@ não abrir o `/dev/video` duas vezes (recarregar a página daria "device
 busy"). Se a câmera não abrir, a página mostra o motivo na tela e tenta
 reconectar sozinha a cada 3s.
 
+### A câmera precisa ser acordada
+
+A GuideCamera não começa a mandar vídeo sozinha. Ela enumera no USB, aceita
+a negociação de formato e o `STREAMON` — e não entrega buffer nenhum. O que
+falta é um comando pelo **canal serial da própria câmera** (`/dev/ttyACM0`,
+interface CDC), o mesmo que o app do Transpetro dispara ao abrir o "Camera
+Viewer".
+
+O `server.py` manda esse comando sozinho antes de cada tentativa de abrir a
+câmera, então não há nada a fazer manualmente. Protocolo:
+`55aa` + payload + XOR do payload + `f0`; o payload padrão é
+`0703000600000003`. Para mudar: `CAM_SERIAL_CMD=...` e `CAM_SERIAL=...`.
+
+### Resolução
+
+O modo correto é **1280x1024**. Em 640x480 a câmera entrega dado, mas a
+leitura sai desalinhada (imagem listrada). A resolução fica no
+`config.json` junto com o índice.
+
 No canto inferior direito da página há um seletor com os `/dev/videoN`
 encontrados e o backend (`auto` / `v4l2`). Trocar ali reabre a captura na
 hora, e a escolha fica salva em `config.json` — sobrevive ao reboot.

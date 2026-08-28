@@ -35,6 +35,53 @@ LIMITE = "quadro"
 # Guarda a camera escolhida na tela para sobreviver ao reboot do kiosque.
 CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
+# A GuideCamera nao comeca a mandar video sozinha: ela enumera no USB, aceita
+# a configuracao de formato e o STREAMON, mas nao entrega buffer nenhum ate
+# receber um comando pelo canal serial (interface CDC da propria camera). E o
+# mesmo comando que o app do Transpetro dispara ao abrir o "Camera Viewer".
+# Protocolo: 55aa + payload + XOR do payload + f0.
+SERIAL = os.environ.get("CAM_SERIAL", "/dev/ttyACM0")
+SERIAL_PAYLOAD = os.environ.get("CAM_SERIAL_CMD", "0703000600000003")
+
+
+def _quadro_guide(payload_hex):
+    corpo = bytes.fromhex(payload_hex)
+    xor = 0
+    for byte in corpo:
+        xor ^= byte
+    return bytes.fromhex("55aa") + corpo + bytes([xor]) + bytes.fromhex("f0")
+
+
+def acordar_camera():
+    """Manda o comando de inicializacao pela serial da camera.
+
+    Devolve a resposta em hex, ou None se nao deu. Falhar aqui nao e fatal:
+    se a camera ja estiver mandando video, o comando so e redundante.
+    """
+    import termios
+
+    if not SERIAL or not os.path.exists(SERIAL):
+        return None
+    fd = None
+    try:
+        fd = os.open(SERIAL, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        attrs = termios.tcgetattr(fd)
+        attrs[4] = attrs[5] = termios.B115200
+        attrs[3] &= ~(termios.ICANON | termios.ECHO | termios.ECHOE | termios.ISIG)
+        attrs[2] |= termios.CS8 | termios.CREAD | termios.CLOCAL
+        termios.tcsetattr(fd, termios.TCSANOW, attrs)
+        os.write(fd, _quadro_guide(SERIAL_PAYLOAD))
+        time.sleep(0.5)
+        try:
+            return os.read(fd, 256).hex() or None
+        except BlockingIOError:
+            return None
+    except OSError:
+        return None
+    finally:
+        if fd is not None:
+            os.close(fd)
+
 
 def dispositivos():
     """Indices dos /dev/videoN presentes na maquina."""
@@ -70,9 +117,9 @@ class Camera:
         # A variavel de ambiente, se vier definida, manda; senao vale o que
         # foi escolhido na tela; senao o padrao do cam.py.
         self.indice    = _env_int("CAM_INDICE", salvo.get("indice", 0))
-        self.largura   = _env_int("CAM_LARGURA")     # None = nao forca
-        self.altura    = _env_int("CAM_ALTURA")
-        self.fps       = _env_int("CAM_FPS")
+        self.largura   = _env_int("CAM_LARGURA", salvo.get("largura"))
+        self.altura    = _env_int("CAM_ALTURA", salvo.get("altura"))
+        self.fps       = _env_int("CAM_FPS", salvo.get("fps"))
         self.qualidade = _env_int("CAM_QUALIDADE", 80)
         self.espelhar  = os.environ.get("CAM_ESPELHAR", "0") == "1"
         self.backend   = os.environ.get(
@@ -120,7 +167,10 @@ class Camera:
             try:
                 with open(CONFIG, "w") as f:
                     json.dump({"indice": self.indice,
-                               "backend": self.backend}, f)
+                               "backend": self.backend,
+                               "largura": self.largura,
+                               "altura": self.altura,
+                               "fps": self.fps}, f)
             except OSError:
                 pass               # nao poder salvar nao impede a troca
 
@@ -130,6 +180,8 @@ class Camera:
             "backend": self.backend,
             "disponiveis": dispositivos(),
             "erro": self._erro,
+            "largura": self.largura,
+            "altura": self.altura,
             "formato": self._formato,      # shape e dtype do ultimo quadro
             "quadros": self._contador,
             "ok": self._erro is None and self._jpeg is not None,
@@ -167,6 +219,7 @@ class Camera:
             if cap is None or not cap.isOpened():
                 if cap is not None:
                     cap.release()
+                acordar_camera()
                 cap = self._abrir(cv2)
                 if not cap.isOpened():
                     # A causa mais comum e outro processo segurando o
