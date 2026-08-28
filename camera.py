@@ -297,16 +297,23 @@ class Camera:
 
     # ---------- consumo ----------
 
-    def quadros(self, timeout=5.0):
-        """Gera os pedacos multipart do MJPEG, um por quadro novo."""
+    def quadros(self, timeout=5.0, espera_inicial=30.0):
+        """Gera os pedacos multipart do MJPEG, um por quadro novo.
+
+        A primeira espera e mais longa: no boot a camera leva alguns segundos
+        para entregar o primeiro quadro, e desistir cedo faria o <img> dar
+        erro logo de cara.
+        """
         self.iniciar()
         visto = -1
+        primeiro = True
         while not self._parar.is_set():
             with self._novo:
                 if self._contador == visto:
-                    self._novo.wait(timeout)
+                    self._novo.wait(espera_inicial if primeiro else timeout)
                 if self._contador == visto:      # timeout: camera travada
                     return
+                primeiro = False
                 visto = self._contador
                 jpeg = self._jpeg
 
