@@ -56,8 +56,11 @@ firefox --kiosk http://localhost:8000/
   `GET`/`POST /api/cam`, `POST /api/poweroff`, `POST /api/reboot` e
   `GET /api/erro`. Os comandos de energia só aceitam `127.0.0.1`.
 - `abrir-navegador.sh` — espera a porta e abre o Firefox em kiosque.
-- `instalar-autostart.sh` — verifica o ambiente conda e os pacotes, e
-  instala as entradas de autostart.
+- `iniciar-servidor.sh` — sobe o `server.py` guardando a saída em
+  `~/.cache/kiosque.log` (o autostart não abre terminal: sem log, uma falha
+  no boot some sem deixar rastro).
+- `instalar-autostart.sh` — verifica o python e os pacotes, e instala as
+  entradas de autostart.
 - `iniciar.sh` — alternativa para Chromium (`--kiosk`), sobe servidor e
   navegador juntos e derruba o servidor ao fechar.
 
@@ -119,6 +122,23 @@ botões chamam o servidor local, que executa `systemctl poweroff` /
 Abrir a página como `file://` também funciona (ela detecta e fala com
 `http://localhost:8000`), mas o servidor precisa estar rodando de qualquer
 jeito — por isso o autostart usa a URL `http://localhost:8000/`.
+
+## Se a tela disser "O server.py está rodando?"
+
+Essa mensagem quer dizer que a página carregou mas não achou o servidor.
+Nessa ordem:
+
+```bash
+pgrep -af server.py                  # está de pé?
+tail -40 ~/.cache/kiosque.log        # por que morreu?
+ss -ltnp | grep :8000                # a porta está ocupada por outro programa?
+```
+
+Para rodar em outra porta, edite a `PORTA` no `abrir-navegador.sh` e passe
+o número ao `server.py`.
+
+Se a mensagem for outra — algo sobre a câmera — o servidor está de pé e o
+problema é só a captura; veja a seção **Câmera**.
 
 ## Se o desligamento não acontecer
 

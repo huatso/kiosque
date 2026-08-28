@@ -165,7 +165,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    servidor = http.server.ThreadingHTTPServer(("127.0.0.1", PORTA), Handler)
+    try:
+        servidor = http.server.ThreadingHTTPServer(("127.0.0.1", PORTA), Handler)
+    except OSError as e:
+        # Erro comum no boot: outro programa ja ocupa a porta. Sem esta
+        # mensagem o autostart falha calado e a pagina so diz "o server.py
+        # esta rodando?".
+        print(f"[kiosque] NAO CONSEGUI ABRIR A PORTA {PORTA}: {e}")
+        print(f"[kiosque] veja quem esta usando:  ss -ltnp | grep :{PORTA}")
+        print(f"[kiosque] ou rode em outra porta: python3 server.py 8001")
+        sys.exit(1)
     camera.iniciar()
     print(f"[kiosque] servindo {PASTA}")
     print(f"[kiosque] http://localhost:{PORTA}")

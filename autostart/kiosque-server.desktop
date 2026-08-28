@@ -2,6 +2,6 @@
 Type=Application
 Name=Kiosque Server
 Comment=Servidor local do kiosque (paginas + desligar/reiniciar)
-Exec=__PYTHON__ __PASTA__/server.py
+Exec=__PASTA__/iniciar-servidor.sh __PYTHON__
 X-GNOME-Autostart-enabled=true
 NoDisplay=true
