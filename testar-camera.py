@@ -73,8 +73,16 @@ for indice in indices:
             altura, largura = quadro.shape[:2]
             canais = quadro.shape[2] if quadro.ndim > 2 else 1
             fps = cap.get(cv2.CAP_PROP_FPS)
+            # O cam.py so precisa exibir o quadro; o kiosque precisa
+            # codificar em JPEG, que e mais exigente quanto ao formato.
+            try:
+                from camera import Camera
+                jpeg = Camera()._para_jpeg(cv2, quadro)
+                conversao = f"jpeg {len(jpeg)}B" if jpeg else "JPEG FALHOU"
+            except Exception as e:
+                conversao = f"JPEG FALHOU ({type(e).__name__})"
             print(f"  video{indice} {nome:4} -> OK  {largura}x{altura} "
-                  f"{canais}ch  {fps:.0f}fps  dtype={quadro.dtype}")
+                  f"{canais}ch  {fps:.0f}fps  dtype={quadro.dtype}  {conversao}")
             funcionaram.append((indice, nome))
         else:
             print(f"  video{indice} {nome:4} -> abriu mas não leu quadro")

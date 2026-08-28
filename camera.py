@@ -80,6 +80,7 @@ class Camera:
 
         self._jpeg = None
         self._erro = None
+        self._formato = None
         self._contador = 0
         self._novo = threading.Condition()
         self._thread = None
@@ -112,6 +113,7 @@ class Camera:
             with self._novo:
                 self._jpeg = None      # nao mostra o quadro da camera antiga
                 self._erro = None
+                self._formato = None
             self._parar.clear()
             self.iniciar()
 
@@ -128,6 +130,8 @@ class Camera:
             "backend": self.backend,
             "disponiveis": dispositivos(),
             "erro": self._erro,
+            "formato": self._formato,      # shape e dtype do ultimo quadro
+            "quadros": self._contador,
             "ok": self._erro is None and self._jpeg is not None,
         }
 
@@ -180,24 +184,54 @@ class Camera:
                 time.sleep(1)
                 continue
 
-            if self.espelhar:
-                quadro = cv2.flip(quadro, 1)
+            self._formato = f"{quadro.shape} {quadro.dtype}"
 
-            ok, buf = cv2.imencode(
-                ".jpg", quadro,
-                [int(cv2.IMWRITE_JPEG_QUALITY), self.qualidade],
-            )
-            if not ok:
+            try:
+                jpeg = self._para_jpeg(cv2, quadro)
+            except Exception as e:
+                # Sem este try, um formato inesperado derruba a thread e a
+                # tela fica preta sem dizer por que.
+                self._erro = f"não consegui converter o quadro {self._formato}: {e}"
+                time.sleep(1)
+                continue
+
+            if jpeg is None:
+                self._erro = f"não consegui codificar o quadro ({self._formato})"
+                time.sleep(1)
                 continue
 
             with self._novo:
-                self._jpeg = buf.tobytes()
+                self._jpeg = jpeg
                 self._contador += 1
                 self._erro = None
                 self._novo.notify_all()
 
         if cap is not None:
             cap.release()
+
+    def _para_jpeg(self, cv2, quadro):
+        """Converte um quadro do OpenCV em JPEG, lidando com formatos que o
+        codificador nao aceita direto."""
+        if self.espelhar:
+            quadro = cv2.flip(quadro, 1)
+
+        # Camera termica costuma entregar 16 bits (Y16). O cv2.imshow() do
+        # cam.py escala isso sozinho ao exibir; o JPEG so aceita 8 bits, e
+        # sem normalizar a imagem sai estourada.
+        if quadro.dtype != "uint8":
+            quadro = cv2.normalize(quadro, None, 0, 255,
+                                   cv2.NORM_MINMAX).astype("uint8")
+
+        # O codificador so aceita 1, 3 ou 4 canais. Um quadro de 2 canais
+        # (YUYV cru) faz o imencode levantar excecao, nao devolver False.
+        if quadro.ndim == 3 and quadro.shape[2] == 2:
+            quadro = quadro[:, :, 0]
+
+        ok, buf = cv2.imencode(
+            ".jpg", quadro,
+            [int(cv2.IMWRITE_JPEG_QUALITY), self.qualidade],
+        )
+        return buf.tobytes() if ok else None
 
     # ---------- consumo ----------
 
