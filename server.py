@@ -14,7 +14,8 @@ sistema e nao pode ser embutida numa pagina, entao os quadros vao como
 MJPEG, que o navegador exibe numa tag <img>:
 
     GET  /cam           -> stream MJPEG da webcam
-    GET  /api/cam       -> estado da camera
+    GET  /api/cam       -> estado da camera e indices disponiveis
+    POST /api/cam       -> troca o indice/backend da camera
 
 Uso:  python3 server.py            (abre em http://localhost:8000)
       python3 server.py 8080       (outra porta)
@@ -26,6 +27,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 
 from camera import LIMITE, camera
 
@@ -86,7 +88,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
         if self.path == "/api/cam":
             camera.iniciar()
-            self._json(200, {"ok": camera.erro is None, "erro": camera.erro})
+            self._json(200, camera.estado())
             return
         if self.path == "/cam":
             self._stream_camera()
@@ -108,7 +110,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass  # a pagina fechou o stream; normal ao recarregar
 
+    def _corpo_json(self):
+        try:
+            tamanho = int(self.headers.get("Content-Length", 0))
+            return json.loads(self.rfile.read(tamanho) or b"{}")
+        except (ValueError, TypeError):
+            return None
+
     def do_POST(self):
+        if self.path == "/api/cam":
+            dados = self._corpo_json()
+            if dados is None:
+                self._json(400, {"ok": False, "erro": "corpo inválido"})
+                return
+            try:
+                camera.trocar(dados.get("indice"), dados.get("backend"))
+            except (TypeError, ValueError) as e:
+                self._json(400, {"ok": False, "erro": f"índice inválido: {e}"})
+                return
+            # Da um instante para a captura abrir antes de responder, senao o
+            # estado sai sempre "sem quadro" e a tela pisca um erro falso.
+            time.sleep(1.5)
+            self._json(200, camera.estado())
+            return
+
         comando = COMANDOS.get(self.path)
         if comando is None:
             self._json(404, {"ok": False, "erro": "endpoint desconhecido"})

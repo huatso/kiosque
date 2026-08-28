@@ -43,10 +43,11 @@
     object-fit: contain;   /* mostra o quadro inteiro, sem cortar */
     display: block;
   }
-  #video.oculto { display: none; }
 
   #mensagem {
     position: absolute;
+    background: rgba(0, 0, 0, .85);
+    border-radius: 10px;
     padding: 16px 20px;
     font-size: 15px;
     line-height: 1.5;
@@ -93,10 +94,37 @@
   #status {
     position: fixed;
     right: 16px;
-    bottom: 16px;
+    bottom: 60px;
     z-index: 20;
     font-size: 13px;
     color: #a1a1aa;
+    text-align: right;
+  }
+
+  /* Seletor de camera */
+  #seletor {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #a1a1aa;
+    background: rgba(0, 0, 0, .6);
+    padding: 8px 10px;
+    border-radius: 8px;
+  }
+  #seletor select {
+    background: rgba(39, 39, 42, .95);
+    color: #fafafa;
+    border: 1px solid #52525b;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
   }
 </style>
 </head>
@@ -105,7 +133,7 @@
 <div id="barra"></div>
 
 <div id="camera">
-  <img id="video" class="oculto" alt="Webcam">
+  <img id="video" alt="Câmera">
   <div id="mensagem"><strong>Conectando à câmera…</strong></div>
 </div>
 
@@ -119,6 +147,15 @@
 
 <div id="status"></div>
 
+<div id="seletor">
+  <label for="indice">Câmera</label>
+  <select id="indice"></select>
+  <select id="backend">
+    <option value="auto">auto</option>
+    <option value="v4l2">v4l2</option>
+  </select>
+</div>
+
 <script>
   // Se a pagina for aberta como file://, uma URL relativa viraria
   // file:///cam. Nesse caso fala com o servidor local direto.
@@ -128,13 +165,14 @@
   const video    = document.getElementById('video');
   const mensagem = document.getElementById('mensagem');
 
-  function mostrarVideo() {
-    video.classList.remove('oculto');
+  let timerAviso = null;
+
+  function esconderMensagem() {
+    clearTimeout(timerAviso);
     mensagem.classList.add('oculto');
   }
 
   function mostrarMensagem(titulo, detalhe) {
-    video.classList.add('oculto');
     mensagem.classList.remove('oculto');
     mensagem.innerHTML = '<strong></strong><span></span>';
     mensagem.querySelector('strong').textContent = titulo;
@@ -142,11 +180,74 @@
   }
 
   function conectarCamera() {
+    mostrarMensagem('Conectando à câmera…', '');
     // O cache-buster evita o navegador reaproveitar um stream ja morto.
     video.src = API + '/cam?t=' + Date.now();
+    // Num stream multipart o evento 'load' pode nao chegar. Se em 5s nao
+    // deu erro, os quadros estao passando: tira o aviso da frente.
+    clearTimeout(timerAviso);
+    timerAviso = setTimeout(esconderMensagem, 5000);
   }
 
-  video.addEventListener('load', mostrarVideo);
+  video.addEventListener('load', esconderMensagem);
+
+  /* ---------- escolha da camera ---------- */
+  const selIndice  = document.getElementById('indice');
+  const selBackend = document.getElementById('backend');
+
+  function preencherSeletor(estado) {
+    const disponiveis = estado.disponiveis || [];
+    // Se a camera em uso nao estiver na lista (indice fora dos /dev/videoN),
+    // inclui mesmo assim para nao apagar a escolha atual do seletor.
+    if (!disponiveis.includes(estado.indice)) disponiveis.push(estado.indice);
+
+    selIndice.innerHTML = '';
+    for (const i of disponiveis.sort((a, b) => a - b)) {
+      const opcao = document.createElement('option');
+      opcao.value = i;
+      opcao.textContent = '/dev/video' + i;
+      selIndice.appendChild(opcao);
+    }
+    selIndice.value  = estado.indice;
+    selBackend.value = estado.backend;
+  }
+
+  async function carregarSeletor() {
+    try {
+      const r = await fetch(API + '/api/cam');
+      preencherSeletor(await r.json());
+    } catch (e) {}
+  }
+
+  async function trocarCamera() {
+    const escolha = {
+      indice:  parseInt(selIndice.value, 10),
+      backend: selBackend.value,
+    };
+    mostrarMensagem('Trocando para /dev/video' + escolha.indice + '…', '');
+    selIndice.disabled = selBackend.disabled = true;
+    try {
+      const r = await fetch(API + '/api/cam', {
+        method: 'POST',
+        body: JSON.stringify(escolha),
+      });
+      const estado = await r.json();
+      preencherSeletor(estado);
+      if (estado.erro) {
+        mostrarMensagem('Sem imagem da câmera', estado.erro);
+      } else {
+        conectarCamera();          // reabre o stream na camera nova
+      }
+    } catch (e) {
+      mostrarMensagem('Sem resposta do servidor', 'O server.py está rodando?');
+    } finally {
+      selIndice.disabled = selBackend.disabled = false;
+    }
+  }
+
+  selIndice.addEventListener('change', trocarCamera);
+  selBackend.addEventListener('change', trocarCamera);
+  carregarSeletor();
 
   video.addEventListener('error', async () => {
     let detalhe = 'O server.py está rodando?';
@@ -154,7 +255,9 @@
       const r = await fetch(API + '/api/cam');
       const dados = await r.json();
       if (dados.erro) detalhe = dados.erro;
+      preencherSeletor(dados);
     } catch (e) {}
+    clearTimeout(timerAviso);
     mostrarMensagem('Sem imagem da câmera', detalhe);
     setTimeout(conectarCamera, 3000);   // tenta de novo sozinho
   });

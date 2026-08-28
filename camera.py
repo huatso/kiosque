@@ -24,11 +24,34 @@ so mexa nisso se precisar:
     CAM_QUALIDADE qualidade do JPEG 1-100    (padrao 80)
 """
 
+import glob
+import json
 import os
 import threading
 import time
 
 LIMITE = "quadro"
+
+# Guarda a camera escolhida na tela para sobreviver ao reboot do kiosque.
+CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+
+
+def dispositivos():
+    """Indices dos /dev/videoN presentes na maquina."""
+    indices = []
+    for caminho in sorted(glob.glob("/dev/video*")):
+        sufixo = caminho[len("/dev/video"):]
+        if sufixo.isdigit():
+            indices.append(int(sufixo))
+    return sorted(indices)
+
+
+def _ler_config():
+    try:
+        with open(CONFIG) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
 
 
 def _env_int(nome, padrao=None):
@@ -43,13 +66,17 @@ def _env_int(nome, padrao=None):
 
 class Camera:
     def __init__(self):
-        self.indice    = _env_int("CAM_INDICE", 0)
+        salvo = _ler_config()
+        # A variavel de ambiente, se vier definida, manda; senao vale o que
+        # foi escolhido na tela; senao o padrao do cam.py.
+        self.indice    = _env_int("CAM_INDICE", salvo.get("indice", 0))
         self.largura   = _env_int("CAM_LARGURA")     # None = nao forca
         self.altura    = _env_int("CAM_ALTURA")
         self.fps       = _env_int("CAM_FPS")
         self.qualidade = _env_int("CAM_QUALIDADE", 80)
         self.espelhar  = os.environ.get("CAM_ESPELHAR", "0") == "1"
-        self.backend   = os.environ.get("CAM_BACKEND", "auto")
+        self.backend   = os.environ.get(
+            "CAM_BACKEND", salvo.get("backend", "auto"))
 
         self._jpeg = None
         self._erro = None
@@ -57,6 +84,7 @@ class Camera:
         self._novo = threading.Condition()
         self._thread = None
         self._parar = threading.Event()
+        self._troca = threading.Lock()
 
     # ---------- controle ----------
 
@@ -69,6 +97,39 @@ class Camera:
 
     def parar(self):
         self._parar.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=3)
+
+    def trocar(self, indice=None, backend=None):
+        """Troca a camera em uso e guarda a escolha."""
+        with self._troca:
+            if indice is not None:
+                self.indice = int(indice)
+            if backend is not None:
+                self.backend = backend
+
+            self.parar()
+            with self._novo:
+                self._jpeg = None      # nao mostra o quadro da camera antiga
+                self._erro = None
+            self._parar.clear()
+            self.iniciar()
+
+            try:
+                with open(CONFIG, "w") as f:
+                    json.dump({"indice": self.indice,
+                               "backend": self.backend}, f)
+            except OSError:
+                pass               # nao poder salvar nao impede a troca
+
+    def estado(self):
+        return {
+            "indice": self.indice,
+            "backend": self.backend,
+            "disponiveis": dispositivos(),
+            "erro": self._erro,
+            "ok": self._erro is None and self._jpeg is not None,
+        }
 
     @property
     def erro(self):

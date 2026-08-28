@@ -51,8 +51,9 @@ firefox --kiosk http://localhost:8000/
 - `index.html` — a página. Faixa preta fixa de `6.5vh` no topo, câmera
   ocupando os `93.5vh` restantes. `Esc` cancela uma confirmação de energia.
 - `camera.py` — captura da câmera via OpenCV, servida como MJPEG.
+- `testar-camera.py` — sonda quais índices/backends abrem a câmera.
 - `server.py` — servidor local. Serve os arquivos e expõe `GET /cam`,
-  `GET /api/cam`, `POST /api/poweroff`, `POST /api/reboot` e
+  `GET`/`POST /api/cam`, `POST /api/poweroff`, `POST /api/reboot` e
   `GET /api/erro`. Os comandos de energia só aceitam `127.0.0.1`.
 - `abrir-navegador.sh` — espera a porta e abre o Firefox em kiosque.
 - `instalar-autostart.sh` — verifica o ambiente conda e os pacotes, e
@@ -71,6 +72,21 @@ Uma única thread lê a câmera e todos os clientes leem do último quadro, para
 não abrir o `/dev/video` duas vezes (recarregar a página daria "device
 busy"). Se a câmera não abrir, a página mostra o motivo na tela e tenta
 reconectar sozinha a cada 3s.
+
+No canto inferior direito da página há um seletor com os `/dev/videoN`
+encontrados e o backend (`auto` / `v4l2`). Trocar ali reabre a captura na
+hora, e a escolha fica salva em `config.json` — sobrevive ao reboot.
+
+Se a imagem não aparecer, o motivo vem escrito na tela. Para investigar no
+terminal, pare o servidor (senão ele segura o dispositivo) e rode a sonda:
+
+```bash
+pkill -f server.py
+./testar-camera.py
+```
+
+Ela lista os dispositivos, mostra quem está usando cada um e testa cada
+índice com os dois backends, dizendo qual funcionou e em que resolução.
 
 Os padrões são os mesmos do `cam.py`: dispositivo `0`, backend automático e
 **sem** forçar resolução ou fps. Forçar um modo que a câmera térmica não
