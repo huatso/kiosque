@@ -160,8 +160,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         threading.Timer(0.5, lambda: executar_energia(comando)).start()
 
     def log_message(self, formato, *args):
-        # Silencia o log de cada arquivo estatico servido.
-        pass
+        # Registra as requisicoes no log do kiosque. Em modo kiosque nao da
+        # para abrir o console do navegador: sem isto nao ha como saber se a
+        # pagina chegou a pedir alguma coisa.
+        sys.stderr.write("[kiosque] %s %s\n" % (
+            self.address_string(), formato % args))
+        sys.stderr.flush()
 
 
 if __name__ == "__main__":
