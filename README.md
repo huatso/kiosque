@@ -14,10 +14,13 @@ cd ~/Documents/kiosque
 
 O `instalar-autostart.sh` faz, nesta ordem:
 
-1. localiza o conda (`CONDA_EXE`, PATH, `~/miniconda3`, `~/anaconda3`,
-   `~/miniforge3`, `/opt/conda`) e ativa o ambiente `base`;
-2. verifica os pacotes necessários (`opencv-python`, `numpy`) e instala com
-   `pip` os que faltarem;
+1. procura um python que já tenha `opencv-python` e `numpy`, nesta ordem:
+   `$PYTHON` (se você passar), o venv local `.venv`, o ambiente conda
+   (**se houver conda na máquina** — não é obrigatório) e o `python3` do
+   sistema;
+2. se nenhum servir, cria o venv local `.venv` (com
+   `--system-site-packages`, para aproveitar um `python3-opencv` vindo do
+   apt) e instala os pacotes que faltam nele;
 3. avisa se não houver `/dev/video*` ou `firefox`;
 4. grava duas entradas em `~/.config/autostart`:
    - `kiosque-server.desktop` — sobe o `server.py` **com o python do
@@ -26,7 +29,13 @@ O `instalar-autostart.sh` faz, nesta ordem:
    - `firefox-kiosk.desktop` — espera a porta responder e abre
      `firefox --kiosk http://localhost:8000/`.
 
-Para usar outro ambiente: `AMBIENTE=meuenv ./instalar-autostart.sh`.
+Para forçar um interpretador específico:
+`PYTHON=/caminho/do/python ./instalar-autostart.sh`
+(ou `AMBIENTE=meuenv`, se a máquina tiver conda).
+
+Se o `venv` não puder ser criado, o script diz o que instalar:
+`sudo apt install python3-venv` — ou, como alternativa,
+`sudo apt install python3-opencv`.
 
 Reinicie a sessão gráfica para testar.
 
