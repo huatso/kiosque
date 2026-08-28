@@ -9,6 +9,13 @@ executar sozinho (uma pagina HTML nao tem acesso ao sistema operacional):
     POST /api/reboot    -> systemctl reboot
     GET  /api/erro      -> erro do ultimo comando de energia, se houve
 
+Serve tambem a webcam. A janela do cv2.imshow() e uma janela nativa do
+sistema e nao pode ser embutida numa pagina, entao os quadros vao como
+MJPEG, que o navegador exibe numa tag <img>:
+
+    GET  /cam           -> stream MJPEG da webcam
+    GET  /api/cam       -> estado da camera
+
 Uso:  python3 server.py            (abre em http://localhost:8000)
       python3 server.py 8080       (outra porta)
 """
@@ -19,6 +26,8 @@ import os
 import subprocess
 import sys
 import threading
+
+from camera import LIMITE, camera
 
 PASTA = os.path.dirname(os.path.abspath(__file__))
 PORTA = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
@@ -75,7 +84,29 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/api/erro":
             self._json(200, {"ok": ultimo_erro is None, "erro": ultimo_erro})
             return
+        if self.path == "/api/cam":
+            camera.iniciar()
+            self._json(200, {"ok": camera.erro is None, "erro": camera.erro})
+            return
+        if self.path == "/cam":
+            self._stream_camera()
+            return
         super().do_GET()
+
+    def _stream_camera(self):
+        camera.iniciar()
+        self.send_response(200)
+        self.send_header(
+            "Content-Type", f"multipart/x-mixed-replace; boundary={LIMITE}"
+        )
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        try:
+            for pedaco in camera.quadros():
+                self.wfile.write(pedaco)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # a pagina fechou o stream; normal ao recarregar
 
     def do_POST(self):
         comando = COMANDOS.get(self.path)
@@ -110,6 +141,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     servidor = http.server.ThreadingHTTPServer(("127.0.0.1", PORTA), Handler)
+    camera.iniciar()
     print(f"[kiosque] servindo {PASTA}")
     print(f"[kiosque] http://localhost:{PORTA}")
     print("[kiosque] Ctrl+C para parar")

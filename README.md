@@ -1,6 +1,7 @@
 # kiosque
 
-Página de kiosque com uma barra preta no topo (altura ajustável em `vh`) e
+Página de kiosque que mostra a imagem da câmera térmica em tela cheia, com
+uma faixa preta fixa no topo mascarando a área que não aparece na tela, e
 botões de desligar / reiniciar a máquina.
 
 ## Instalação na máquina do kiosque
@@ -28,22 +29,55 @@ firefox --kiosk http://localhost:8000/
 
 ## Arquivos
 
-- `index.html` — a página. Barra preta fixa no topo em `6.5vh` (padrão),
-  ajustável em tempo real pelo slider/campo numérico. Tecla `c` mostra ou
-  esconde o painel de ajuste; `Esc` cancela uma confirmação de energia.
-- `server.py` — servidor local. Serve os arquivos e expõe
-  `POST /api/poweroff`, `POST /api/reboot` e `GET /api/erro`. Só aceita
-  chamadas de `127.0.0.1`.
+- `index.html` — a página. Faixa preta fixa de `6.5vh` no topo, câmera
+  ocupando os `93.5vh` restantes. `Esc` cancela uma confirmação de energia.
+- `camera.py` — captura da câmera via OpenCV, servida como MJPEG.
+- `server.py` — servidor local. Serve os arquivos e expõe `GET /cam`,
+  `GET /api/cam`, `POST /api/poweroff`, `POST /api/reboot` e
+  `GET /api/erro`. Os comandos de energia só aceitam `127.0.0.1`.
 - `abrir-navegador.sh` — espera a porta e abre o Firefox em kiosque.
 - `instalar-autostart.sh` — instala as entradas de autostart.
 - `iniciar.sh` — alternativa para Chromium (`--kiosk`), sobe servidor e
   navegador juntos e derruba o servidor ao fechar.
 
+## Câmera
+
+A janela do `cv2.imshow()` é uma janela nativa do sistema — não dá para
+embutir numa página HTML. Então `camera.py` faz a mesma captura do
+`cam.py`, codifica cada quadro em JPEG e envia como MJPEG em `/cam`; a
+página exibe isso numa tag `<img>`.
+
+Uma única thread lê a câmera e todos os clientes leem do último quadro, para
+não abrir o `/dev/video` duas vezes (recarregar a página daria "device
+busy"). Se a câmera não abrir, a página mostra o motivo na tela e tenta
+reconectar sozinha a cada 3s.
+
+Os padrões são os mesmos do `cam.py`: dispositivo `0`, backend automático e
+**sem** forçar resolução ou fps. Forçar um modo que a câmera térmica não
+suporta faz a captura falhar. Para ajustar, use variáveis de ambiente no
+`kiosque-server.desktop` ou na linha de comando:
+
+```bash
+CAM_INDICE=2 CAM_BACKEND=v4l2 python3 server.py
+```
+
+| variável | padrão | o que faz |
+|---|---|---|
+| `CAM_INDICE` | `0` | índice do dispositivo (o `cam2.py` usa `2`) |
+| `CAM_BACKEND` | `auto` | `auto` ou `v4l2` |
+| `CAM_LARGURA` / `CAM_ALTURA` | não força | resolução, se precisar fixar |
+| `CAM_FPS` | não força | fps, se precisar fixar |
+| `CAM_ESPELHAR` | `0` | `1` espelha horizontalmente |
+| `CAM_QUALIDADE` | `80` | qualidade do JPEG (1–100) |
+
+Precisa do OpenCV: `pip install opencv-python`.
+
 ## Por que precisa do server.py
 
 Uma página HTML não tem acesso ao sistema operacional — JavaScript no
-navegador não consegue desligar o computador. Os botões chamam o servidor
-local, que executa `systemctl poweroff` / `systemctl reboot` de fato.
+navegador não consegue desligar o computador nem abrir `/dev/video`. Os
+botões chamam o servidor local, que executa `systemctl poweroff` /
+`systemctl reboot` de fato.
 
 Abrir a página como `file://` também funciona (ela detecta e fala com
 `http://localhost:8000`), mas o servidor precisa estar rodando de qualquer

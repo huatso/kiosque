@@ -6,26 +6,58 @@
 <title>Kiosque</title>
 <style>
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; height: 100%; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
   body {
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    background: #f4f4f5;
-    color: #18181b;
+    background: #000;
+    color: #fafafa;
   }
 
-  /* A div preta no topo da tela */
+  /* Mascara da faixa que nao aparece na tela. Nada aqui dentro. */
   #barra {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
-    height: 6.5vh;         /* valor inicial, alterado via JS */
+    height: 6.5vh;
     background: #000;
     z-index: 10;
-    /* Mascara da area que nao aparece na tela: nada aqui dentro. */
   }
 
-  /* Botoes de energia — na area visivel, canto inferior esquerdo */
+  /* Area util: tudo abaixo da mascara */
+  #camera {
+    position: fixed;
+    top: 6.5vh;
+    left: 0;
+    width: 100%;
+    height: 93.5vh;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  #video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;   /* mostra o quadro inteiro, sem cortar */
+    display: block;
+  }
+  #video.oculto { display: none; }
+
+  #mensagem {
+    position: absolute;
+    padding: 16px 20px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: #a1a1aa;
+    text-align: center;
+    max-width: 70%;
+  }
+  #mensagem strong { color: #fafafa; display: block; margin-bottom: 6px; }
+  #mensagem.oculto { display: none; }
+
+  /* Botoes de energia — canto inferior esquerdo, na area visivel */
   #energia {
     position: fixed;
     left: 16px;
@@ -34,71 +66,48 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    background: #fff;
-    border: 1px solid #d4d4d8;
-    border-radius: 10px;
-    padding: 10px 12px;
-    box-shadow: 0 6px 20px rgba(0,0,0,.15);
   }
   .btn-energia {
-    background: #f4f4f5;
-    color: #18181b;
-    border: 1px solid #d4d4d8;
+    background: rgba(39, 39, 42, .85);
+    color: #fafafa;
+    border: 1px solid #52525b;
     border-radius: 6px;
     padding: 8px 14px;
     font-size: 14px;
     font-family: inherit;
     cursor: pointer;
     white-space: nowrap;
+    backdrop-filter: blur(4px);
   }
-  .btn-energia:hover { background: #e4e4e7; }
-  .btn-energia.perigo {
-    background: #dc2626;
-    border-color: #b91c1c;
-    color: #fff;
-  }
+  .btn-energia:hover { background: rgba(63, 63, 70, .95); }
+  .btn-energia.perigo { background: #dc2626; border-color: #ef4444; }
   .btn-energia.perigo:hover { background: #b91c1c; }
-  #aviso { color: #b91c1c; font-size: 14px; font-weight: 600; }
-
-  /* Painel de controle do vh */
-  #painel {
+  #aviso {
+    color: #fca5a5;
+    font-size: 14px;
+    font-weight: 600;
+    background: rgba(0, 0, 0, .7);
+    padding: 6px 10px;
+    border-radius: 6px;
+  }
+  #status {
     position: fixed;
     right: 16px;
     bottom: 16px;
     z-index: 20;
-    background: #fff;
-    border: 1px solid #d4d4d8;
-    border-radius: 10px;
-    padding: 14px 16px;
-    box-shadow: 0 6px 20px rgba(0,0,0,.15);
-    width: 260px;
-  }
-  #painel label {
-    display: block;
     font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 8px;
+    color: #a1a1aa;
   }
-  #slider { width: 100%; }
-  .linha { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-  #campo {
-    width: 80px;
-    padding: 6px 8px;
-    font-size: 14px;
-    border: 1px solid #d4d4d8;
-    border-radius: 6px;
-  }
-  .unidade { font-size: 13px; color: #52525b; }
-  #pixels { font-size: 12px; color: #71717a; margin-top: 8px; }
-
-  /* Conteudo empurrado para baixo da barra */
-  #conteudo { padding: 24px; margin-top: 6.5vh; }
-  #status { font-size: 13px; color: #71717a; min-height: 1.2em; }
 </style>
 </head>
 <body>
 
 <div id="barra"></div>
+
+<div id="camera">
+  <img id="video" class="oculto" alt="Webcam">
+  <div id="mensagem"><strong>Conectando à câmera…</strong></div>
+</div>
 
 <div id="energia">
   <span id="aviso" hidden></span>
@@ -108,56 +117,49 @@
   <button class="btn-energia" id="btn-cancelar" hidden>Cancelar</button>
 </div>
 
-<div id="conteudo">
-  <h1>Conteúdo da página</h1>
-  <p>Tecla <kbd>c</kbd> mostra/esconde o painel de ajuste da altura da div preta (<code>vh</code>).</p>
-  <p id="status"></p>
-</div>
-
-<div id="painel">
-  <label for="slider">Altura da div preta (vh)</label>
-  <input type="range" id="slider" min="0" max="100" step="0.5" value="6.5">
-  <div class="linha">
-    <input type="number" id="campo" min="0" max="100" step="0.5" value="6.5">
-    <span class="unidade">vh</span>
-  </div>
-  <div id="pixels"></div>
-</div>
+<div id="status"></div>
 
 <script>
-  /* ---------- altura da barra preta ---------- */
-  const PADRAO   = 6.5;
-  const barra    = document.getElementById('barra');
-  const conteudo = document.getElementById('conteudo');
-  const slider   = document.getElementById('slider');
-  const campo    = document.getElementById('campo');
-  const pixels   = document.getElementById('pixels');
+  // Se a pagina for aberta como file://, uma URL relativa viraria
+  // file:///cam. Nesse caso fala com o servidor local direto.
+  const API = location.protocol === 'file:' ? 'http://localhost:8000' : '';
 
-  function aplicar(valor) {
-    let v = parseFloat(valor);
-    if (isNaN(v)) return;
-    v = Math.min(100, Math.max(0, v));
+  /* ---------- webcam ---------- */
+  const video    = document.getElementById('video');
+  const mensagem = document.getElementById('mensagem');
 
-    barra.style.height = v + 'vh';
-    conteudo.style.marginTop = v + 'vh';
-
-    slider.value = v;
-    campo.value  = v;
-    pixels.textContent = `${v}vh = ${(window.innerHeight * v / 100).toFixed(0)}px`;
-
-    try { localStorage.setItem('kiosque-vh', v); } catch (e) {}
+  function mostrarVideo() {
+    video.classList.remove('oculto');
+    mensagem.classList.add('oculto');
   }
 
-  slider.addEventListener('input', e => aplicar(e.target.value));
-  campo.addEventListener('input',  e => aplicar(e.target.value));
-  window.addEventListener('resize', () => aplicar(slider.value));
+  function mostrarMensagem(titulo, detalhe) {
+    video.classList.add('oculto');
+    mensagem.classList.remove('oculto');
+    mensagem.innerHTML = '<strong></strong><span></span>';
+    mensagem.querySelector('strong').textContent = titulo;
+    mensagem.querySelector('span').textContent = detalhe || '';
+  }
 
-  let inicial = PADRAO;
-  try {
-    const salvo = localStorage.getItem('kiosque-vh');
-    if (salvo !== null) inicial = parseFloat(salvo);
-  } catch (e) {}
-  aplicar(inicial);
+  function conectarCamera() {
+    // O cache-buster evita o navegador reaproveitar um stream ja morto.
+    video.src = API + '/cam?t=' + Date.now();
+  }
+
+  video.addEventListener('load', mostrarVideo);
+
+  video.addEventListener('error', async () => {
+    let detalhe = 'O server.py está rodando?';
+    try {
+      const r = await fetch(API + '/api/cam');
+      const dados = await r.json();
+      if (dados.erro) detalhe = dados.erro;
+    } catch (e) {}
+    mostrarMensagem('Sem imagem da câmera', detalhe);
+    setTimeout(conectarCamera, 3000);   // tenta de novo sozinho
+  });
+
+  conectarCamera();
 
   /* ---------- desligar / reiniciar ---------- */
   const btnDesligar  = document.getElementById('btn-desligar');
@@ -169,10 +171,6 @@
 
   let acao = null;          // 'poweroff' | 'reboot'
   let timerCancelar = null;
-
-  // Se a pagina foi aberta como file://, uma URL relativa viraria
-  // file:///api/poweroff. Nesse caso fala com o servidor local direto.
-  const API = location.protocol === 'file:' ? 'http://localhost:8000' : '';
 
   function pedirConfirmacao(qual, texto) {
     acao = qual;
@@ -223,23 +221,7 @@
   btnReiniciar.addEventListener('click', () => pedirConfirmacao('reboot',   'Reiniciar o computador?'));
   btnConfirmar.addEventListener('click', executar);
   btnCancelar.addEventListener('click',  resetar);
-
-  /* ---------- modo kiosque: tecla "c" mostra/esconde o painel ---------- */
-  const painel = document.getElementById('painel');
-  function mostrarPainel(mostrar) {
-    painel.hidden = !mostrar;
-    try { localStorage.setItem('kiosque-painel', mostrar ? '1' : '0'); } catch (e) {}
-  }
-  document.addEventListener('keydown', e => {
-    if (e.key === 'c' || e.key === 'C') mostrarPainel(painel.hidden);
-    if (e.key === 'Escape') resetar();
-  });
-  let painelVisivel = true;
-  try {
-    const salvo = localStorage.getItem('kiosque-painel');
-    if (salvo !== null) painelVisivel = salvo === '1';
-  } catch (e) {}
-  mostrarPainel(painelVisivel);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') resetar(); });
 </script>
 
 </body>
