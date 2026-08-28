@@ -24,4 +24,11 @@ fi
   echo "python: $PYTHON"
 } >> "$LOG"
 
-exec "$PYTHON" "$PASTA/server.py" >> "$LOG" 2>&1
+# Rodando na mao (terminal), mostra tambem na tela: senao o erro vai so
+# para o log e o comando parece falhar sem motivo. No autostart nao ha
+# terminal, entao vai so para o log.
+if [ -t 1 ]; then
+  exec "$PYTHON" "$PASTA/server.py" 2>&1 | tee -a "$LOG"
+else
+  exec "$PYTHON" "$PASTA/server.py" >> "$LOG" 2>&1
+fi
