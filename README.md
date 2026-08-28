@@ -12,11 +12,21 @@ cd ~/Documents/kiosque
 ./instalar-autostart.sh
 ```
 
-Isso grava duas entradas em `~/.config/autostart`:
+O `instalar-autostart.sh` faz, nesta ordem:
 
-- `kiosque-server.desktop` — sobe o `server.py`
-- `firefox-kiosk.desktop`  — espera a porta responder e abre
-  `firefox --kiosk http://localhost:8000/`
+1. localiza o conda (`CONDA_EXE`, PATH, `~/miniconda3`, `~/anaconda3`,
+   `~/miniforge3`, `/opt/conda`) e ativa o ambiente `base`;
+2. verifica os pacotes necessários (`opencv-python`, `numpy`) e instala com
+   `pip` os que faltarem;
+3. avisa se não houver `/dev/video*` ou `firefox`;
+4. grava duas entradas em `~/.config/autostart`:
+   - `kiosque-server.desktop` — sobe o `server.py` **com o python do
+     ambiente conda**, gravado por caminho absoluto (o `python3` do PATH da
+     sessão gráfica pode ser outro, sem o `cv2`);
+   - `firefox-kiosk.desktop` — espera a porta responder e abre
+     `firefox --kiosk http://localhost:8000/`.
+
+Para usar outro ambiente: `AMBIENTE=meuenv ./instalar-autostart.sh`.
 
 Reinicie a sessão gráfica para testar.
 
@@ -36,7 +46,8 @@ firefox --kiosk http://localhost:8000/
   `GET /api/cam`, `POST /api/poweroff`, `POST /api/reboot` e
   `GET /api/erro`. Os comandos de energia só aceitam `127.0.0.1`.
 - `abrir-navegador.sh` — espera a porta e abre o Firefox em kiosque.
-- `instalar-autostart.sh` — instala as entradas de autostart.
+- `instalar-autostart.sh` — verifica o ambiente conda e os pacotes, e
+  instala as entradas de autostart.
 - `iniciar.sh` — alternativa para Chromium (`--kiosk`), sobe servidor e
   navegador juntos e derruba o servidor ao fechar.
 
@@ -70,7 +81,8 @@ CAM_INDICE=2 CAM_BACKEND=v4l2 python3 server.py
 | `CAM_ESPELHAR` | `0` | `1` espelha horizontalmente |
 | `CAM_QUALIDADE` | `80` | qualidade do JPEG (1–100) |
 
-Precisa do OpenCV: `pip install opencv-python`.
+Precisa do OpenCV — o `instalar-autostart.sh` cuida disso, ou na mão:
+`pip install opencv-python`.
 
 ## Por que precisa do server.py
 
