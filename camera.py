@@ -169,8 +169,13 @@ class Camera:
                     cap.release()
                 cap = self._abrir(cv2)
                 if not cap.isOpened():
-                    self._erro = (f"nao consegui abrir a camera {self.indice} "
-                                  f"(backend {self.backend})")
+                    # A causa mais comum e outro processo segurando o
+                    # dispositivo — inclusive um server.py antigo esquecido.
+                    self._erro = (
+                        f"não consegui abrir a câmera {self.indice} "
+                        f"(backend {self.backend}) — em uso por outro "
+                        f"programa? veja: fuser -v /dev/video{self.indice}"
+                    )
                     # Tenta de novo: a camera pode aparecer depois do boot.
                     time.sleep(2)
                     continue
