@@ -28,6 +28,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 
 from camera import LIMITE, camera
 
@@ -82,15 +83,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(corpo)
 
+    def _rota(self):
+        """Caminho sem a query string.
+
+        A pagina chama /cam?t=<timestamp> para o navegador nao reaproveitar um
+        stream morto; comparar com self.path cru faria a rota nao casar.
+        """
+        return urllib.parse.urlsplit(self.path).path
+
     def do_GET(self):
-        if self.path == "/api/erro":
+        rota = self._rota()
+        if rota == "/api/erro":
             self._json(200, {"ok": ultimo_erro is None, "erro": ultimo_erro})
             return
-        if self.path == "/api/cam":
+        if rota == "/api/cam":
             camera.iniciar()
             self._json(200, camera.estado())
             return
-        if self.path == "/cam":
+        if rota == "/cam":
             self._stream_camera()
             return
         super().do_GET()
@@ -118,7 +128,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return None
 
     def do_POST(self):
-        if self.path == "/api/cam":
+        rota = self._rota()
+        if rota == "/api/cam":
             dados = self._corpo_json()
             if dados is None:
                 self._json(400, {"ok": False, "erro": "corpo inválido"})
@@ -134,7 +145,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._json(200, camera.estado())
             return
 
-        comando = COMANDOS.get(self.path)
+        comando = COMANDOS.get(rota)
         if comando is None:
             self._json(404, {"ok": False, "erro": "endpoint desconhecido"})
             return
